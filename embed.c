@@ -18,29 +18,6 @@ typedef struct string {
 	size_t length;
 } str;
 
-/* Reads an entire file into memory */
-static str
-read_file(const char *filename)
-{
-	str result = {0};
-	FILE *file = fopen(filename, "rb");
-	if (file) {
-		fseek(file, 0, SEEK_END);
-		result.length = ftell(file);
-		fseek(file, 0, SEEK_SET);
-
-		result.at = malloc(result.length + 1);
-		if (result.at) {
-			fread(result.at, result.length, 1, file);
-			result.at[result.length] = '\0';
-		}
-
-		fclose(file);
-	}
-
-	return result;
-}
-
 int
 main(int argc, char *argv[])
 {
@@ -59,7 +36,27 @@ main(int argc, char *argv[])
 	 * The second argument is the path to the file.
 	 */
 	char *input = argv[2];
-	str data = read_file(input);
+	str data = {0};
+	FILE *input_file = fopen(input, "rb");
+	if (input_file) {
+		fseek(input_file, 0, SEEK_END);
+		data.length = ftell(input_file);
+		fseek(input_file, 0, SEEK_SET);
+
+		data.at = malloc(data.length + 1);
+		if (data.at) {
+			fread(data.at, data.length, 1, input_file);
+			data.at[data.length] = '\0';
+		} else {
+			perror(input);
+			return 1;
+		}
+
+		fclose(input_file);
+	} else {
+		perror(input);
+		return 1;
+	}
 
 	/*
 	 * The input file path is used for the output, too. The file extension is
