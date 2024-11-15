@@ -1,3 +1,12 @@
+/*
+ * Usage: embed variable-name file
+ *
+ * Embeds the contents of the file as variable-name. It creates two variables
+ * begin and end, so in a C source file you can load the data as follows:
+ *
+ *     extern char foo_begin[];
+ *     extern char foo_end[];
+ */
 #include <elf.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -9,25 +18,7 @@ typedef struct string {
 	size_t length;
 } str;
 
-static void
-die(const char *fmt, ...)
-{
-	va_list ap;
-
-	va_start(ap, fmt);
-	vfprintf(stderr, fmt, ap);
-	va_end(ap);
-
-	if (fmt[0] && fmt[strlen(fmt) - 1] == ':') {
-		fputc(' ', stderr);
-		perror(0);
-	} else {
-		fputc('\n', stderr);
-	}
-
-	exit(1);
-}
-
+/* Reads an entire file into memory */
 static str
 read_file(const char *filename)
 {
@@ -58,18 +49,29 @@ main(int argc, char *argv[])
 		return 1;
 	}
 
-	// TODO: Use first command-line argument as name
+	/*
+	 * The first argument is the name of the created variable. The program will
+	 * create two variables for the beginning and end of the data respectively.
+	 */
 	char *name = argv[1];
+
+	/*
+	 * The second argument is the path to the file.
+	 */
 	char *input = argv[2];
 	str data = read_file(input);
 
-	// TODO: Choose a temporary filename
-
+	/*
+	 * The input file path is used for the output, too. The file extension is
+	 * stripped from the path and we append the .o extension for the object
+	 * file.
+	 */
 	char *end = input + strlen(input);
 	while (end-- > input) {
 		if (*end == '.') {
 			goto next;
 		} else if (*end == '/') {
+			/* No file extension; we're at the file separator */
 			end = input + strlen(input);
 			goto next;
 		}
@@ -77,13 +79,17 @@ main(int argc, char *argv[])
 
 	end = input + strlen(input);
 next:
+	/* Create a new string for the output file */
 	char *output = malloc(end - input + 2);
+	/* Append the filename without the extension */
 	memcpy(output, input, end - input);
+	/* Append the new file extension */
 	memcpy(output + (end - input), ".o", 2);
 
 	FILE *f = fopen(output, "w");
 	if (f == NULL) {
-		die("%s:", output);
+		perror(output);
+		return 1;
 	}
 
 	Elf64_Ehdr h = {0};
@@ -109,9 +115,15 @@ next:
 	char shstrs[] = "\0.shstrtab\0.strtab\0.symtab\0.rodata";
 
 	// write the section headers
+
+	/* The first section in an ELF file must be the null section. */
 	Elf64_Shdr null_section = {0};
 	fwrite(&null_section, sizeof(null_section), 1, f);
 
+	/*
+	 * The next section contains the names of the sections. We store the names
+	 * as a sequence of null-terminated strings in the shstrs.
+	 */
 	Elf64_Shdr shstrtab = {0};
 	shstrtab.sh_name = 1;
 	shstrtab.sh_type = SHT_STRTAB;
@@ -123,6 +135,7 @@ next:
 	strtab.sh_name = 11;
 	strtab.sh_type = SHT_STRTAB;
 	strtab.sh_offset = shstrtab.sh_offset + shstrtab.sh_size;
+	/* Use a crude calculation for the size of the string table */
 	strtab.sh_size = 2 * strlen(name) + sizeof("\0_begin\0_end\0.rodata");
 	fwrite(&strtab, sizeof(strtab), 1, f);
 
@@ -131,6 +144,11 @@ next:
 	symtab.sh_type = SHT_SYMTAB;
 	symtab.sh_link = 2;
 	symtab.sh_info = 2;
+
+	/*
+	 * There are four symbols in total: the null symbol, the section symbol
+	 * and the begin and end symbols
+	 */
 	symtab.sh_size = 4 * sizeof(Elf64_Sym);
 	symtab.sh_entsize = sizeof(Elf64_Sym);
 	symtab.sh_offset = strtab.sh_offset + strtab.sh_size;
