@@ -123,7 +123,7 @@ next:
 	strtab.sh_name = 11;
 	strtab.sh_type = SHT_STRTAB;
 	strtab.sh_offset = shstrtab.sh_offset + shstrtab.sh_size;
-	strtab.sh_size = strlen(name) + 2 + sizeof(".rodata");
+	strtab.sh_size = 2 * strlen(name) + sizeof("\0_begin\0_end\0.rodata");
 	fwrite(&strtab, sizeof(strtab), 1, f);
 
 	Elf64_Shdr symtab = {0};
@@ -131,7 +131,7 @@ next:
 	symtab.sh_type = SHT_SYMTAB;
 	symtab.sh_link = 2;
 	symtab.sh_info = 2;
-	symtab.sh_size = 3 * sizeof(Elf64_Sym);
+	symtab.sh_size = 4 * sizeof(Elf64_Sym);
 	symtab.sh_entsize = sizeof(Elf64_Sym);
 	symtab.sh_offset = strtab.sh_offset + strtab.sh_size;
 	fwrite(&symtab, sizeof(symtab), 1, f);
@@ -150,6 +150,10 @@ next:
 	// .strtab data
 	fputc('\0', f);
 	fputs(name, f);
+	fputs("_begin", f);
+	fputc('\0', f);
+	fputs(name, f);
+	fputs("_end", f);
 	fputc('\0', f);
 	fputs(".rodata", f);
 	fputc('\0', f);
@@ -161,18 +165,27 @@ next:
 	fwrite(&sym, sizeof(sym), 1, f);
 
 	// section symbol
-	sym.st_name = strlen(name) + 2;
+	sym.st_name = 1 + strlen(name) + sizeof("_begin\0_end");
 	sym.st_info = ELF64_ST_INFO(STB_LOCAL, STT_SECTION);
 	sym.st_shndx = 4;
 	sym.st_size = 0;
 	fwrite(&sym, sizeof(sym), 1, f);
 
-	// data symbol
+	// begin symbol
 	memset(&sym, 0, sizeof(sym));
 	sym.st_name = 1;
 	sym.st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT);
 	sym.st_shndx = 4;
 	sym.st_size = 8;
+	fwrite(&sym, sizeof(sym), 1, f);
+
+	// end symbol
+	memset(&sym, 0, sizeof(sym));
+	sym.st_name = 1 + strlen(name) + sizeof("_begin");
+	sym.st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT);
+	sym.st_shndx = 4;
+	sym.st_size = 8;
+	sym.st_value = data.length;
 	fwrite(&sym, sizeof(sym), 1, f);
 
 	// .rodata data
