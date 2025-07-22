@@ -77,11 +77,10 @@ main(int argc, char *argv[])
 	end = input + strlen(input);
 next:
 	/* Create a new string for the output file */
-	char *output = malloc(end - input + 2);
-	/* Append the filename without the extension */
+	char *output = malloc(end - input + 3);
 	memcpy(output, input, end - input);
-	/* Append the new file extension */
 	memcpy(output + (end - input), ".o", 2);
+	output[end - input + 2] = '\0';
 
 	FILE *f = fopen(output, "w");
 	if (f == NULL) {
